@@ -32,7 +32,7 @@ THIS_DIRECTORY_RELATIVE = Path(__file__).parent.relative_to(PROJECT_ROOT_PATH)
 # Should be "private_gpt/ui/avatar-bot.ico"
 AVATAR_BOT = THIS_DIRECTORY_RELATIVE / "avatar-bot.ico"
 
-UI_TAB_TITLE = "My Private GPT"
+UI_TAB_TITLE = "NEC GPT"
 
 SOURCES_SEPARATOR = "<hr>Sources: \n"
 
@@ -377,20 +377,21 @@ class PrivateGptUi:
             "justify-content: center;"
             "align-items: center;"
             "}"
-            ".logo img { height: 25% }"
+            ".logo img { height: 40%; max-width: 80%; object-fit: contain; }"
             ".contain { display: flex !important; flex-direction: column !important; }"
             "#component-0, #component-3, #component-10, #component-8  { height: 100% !important; }"
             "#chatbot { flex-grow: 1 !important; overflow: auto !important;}"
             "#col { height: calc(100vh - 112px - 16px) !important; }"
             "hr { margin-top: 1em; margin-bottom: 1em; border: 0; border-top: 1px solid #FFF; }"
-            ".avatar-image { background-color: antiquewhite; border-radius: 2px; }"
-            ".footer { text-align: center; margin-top: 20px; font-size: 14px; display: flex; align-items: center; justify-content: center; }"
-            ".footer-zylon-link { display:flex; margin-left: 5px; text-decoration: auto; color: var(--body-text-color); }"
-            ".footer-zylon-link:hover { color: #C7BAFF; }"
-            ".footer-zylon-ico { height: 20px; margin-left: 5px; background-color: antiquewhite; border-radius: 2px; }",
+            "footer { display: none !important; visibility: hidden !important; }"
+            ".avatar-image { background-color: antiquewhite; border-radius: 2px; }",
+            # ".footer { text-align: center; margin-top: 20px; font-size: 14px; display: flex; align-items: center; justify-content: center; }"
+            # ".footer-zylon-link { display:flex; margin-left: 5px; text-decoration: auto; color: var(--body-text-color); }"
+            # ".footer-zylon-link:hover { color: #C7BAFF; }"
+            # ".footer-zylon-ico { height: 20px; margin-left: 5px; background-color: antiquewhite; border-radius: 2px; }",
         ) as blocks:
             with gr.Row():
-                gr.HTML(f"<div class='logo'/><img src={logo_svg} alt=PrivateGPT></div")
+                gr.HTML(f"<div class='logo'><img src='https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR_bS9Z-_0BLzFCzTEys0CJPF48FS5K61yp2Q&s' alt='NEC Chat'></div>")
 
             with gr.Row(equal_height=False):
                 with gr.Column(scale=3):
@@ -561,12 +562,12 @@ class PrivateGptUi:
                         additional_inputs=[mode, upload_button, system_prompt_input],
                     )
 
-            with gr.Row():
-                avatar_byte = AVATAR_BOT.read_bytes()
-                f_base64 = f"data:image/png;base64,{base64.b64encode(avatar_byte).decode('utf-8')}"
-                gr.HTML(
-                    f"<div class='footer'><a class='footer-zylon-link' href='https://zylon.ai/'>Maintained by Zylon <img class='footer-zylon-ico' src='{f_base64}' alt=Zylon></a></div>"
-                )
+            # with gr.Row():
+            #     avatar_byte = AVATAR_BOT.read_bytes()
+            #     f_base64 = f"data:image/png;base64,{base64.b64encode(avatar_byte).decode('utf-8')}"
+            #     gr.HTML(
+            #         f"<div class='footer'><a class='footer-zylon-link' href='https://zylon.ai/'>Maintained by Zylon <img class='footer-zylon-ico' src='{f_base64}' alt=Zylon></a></div>"
+            #     )
 
         return blocks
 
@@ -579,7 +580,7 @@ class PrivateGptUi:
         blocks = self.get_ui_blocks()
         blocks.queue()
         logger.info("Mounting the gradio UI, at path=%s", path)
-        gr.mount_gradio_app(app, blocks, path=path, favicon_path=AVATAR_BOT)
+        gr.mount_gradio_app(app, blocks, path=path, favicon_path=AVATAR_BOT, show_error=False)
 
 
 if __name__ == "__main__":

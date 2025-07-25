@@ -60,6 +60,11 @@ ffmpy = {version ="^0.4.0", optional = true}
 einops = {version = "^0.8.0", optional = true}
 retry-async = "^0.1.4"
 
+# Optional MLflow integration
+mlflow = {version = "^2.17.0", optional = true}
+
+
+
 [tool.poetry.extras]
 ui = ["gradio", "ffmpy"]
 llms-llama-cpp = ["llama-index-llms-llama-cpp"]
@@ -83,6 +88,7 @@ vector-stores-postgres = ["llama-index-vector-stores-postgres"]
 vector-stores-milvus = ["llama-index-vector-stores-milvus"]
 storage-nodestore-postgres = ["llama-index-storage-docstore-postgres","llama-index-storage-index-store-postgres","psycopg2-binary","asyncpg"]
 rerank-sentence-transformers = ["torch", "sentence-transformers"]
+mlflow = ["mlflow"]
 
 [tool.poetry.group.dev.dependencies]
 black = "^24"

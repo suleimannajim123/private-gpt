@@ -27,6 +27,13 @@ from private_gpt.open_ai.extensions.context_filter import ContextFilter
 from private_gpt.server.chunks.chunks_service import Chunk
 from private_gpt.settings.settings import Settings
 
+# Make MLflow import optional
+try:
+    import mlflow
+    MLFLOW_AVAILABLE = True
+except ImportError:
+    MLFLOW_AVAILABLE = False
+
 if TYPE_CHECKING:
     from llama_index.core.postprocessor.types import BaseNodePostprocessor
 
@@ -104,6 +111,12 @@ class ChatService:
             embed_model=embedding_component.embedding_model,
             show_progress=True,
         )
+
+        # Only setup MLflow if it's available
+        if MLFLOW_AVAILABLE:
+            mlflow.set_tracking_uri("file:./mlruns")
+            mlflow.set_experiment("private-gpt-rag")
+            mlflow.llama_index.autolog()
 
     def _chat_engine(
         self,
@@ -214,4 +227,15 @@ class ChatService:
         )
         sources = [Chunk.from_node(node) for node in wrapped_response.source_nodes]
         completion = Completion(response=wrapped_response.response, sources=sources)
+
+        # Only log to MLflow if it's available
+        if MLFLOW_AVAILABLE:
+            with mlflow.start_run():
+                mlflow.llama_index.log_model(
+                    self.index,
+                    name="rag-index",
+                    engine_type="chat",
+                    input_example=messages[-1].content if messages else "What is this about?"
+                )
+
         return completion
