@@ -4,6 +4,7 @@ import logging
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from injector import Injector
 from llama_index.core.callbacks import CallbackManager
 from llama_index.core.callbacks.global_handlers import create_global_handler
@@ -65,5 +66,10 @@ def create_app(root_injector: Injector) -> FastAPI:
 
         ui = root_injector.get(PrivateGptUi)
         ui.mount_in_app(app, settings.ui.path)
+        
+        # Add redirect to force light theme
+        @app.get("/")
+        async def redirect_to_light_theme():
+            return RedirectResponse(url="/?__theme=light", status_code=302)
 
     return app

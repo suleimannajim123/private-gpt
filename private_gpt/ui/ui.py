@@ -6,15 +6,15 @@ import time
 from collections.abc import Iterable
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import gradio as gr  # type: ignore
 from fastapi import FastAPI
-from gradio.themes.utils.colors import slate  # type: ignore
+from gradio.themes.utils.colors import slate, purple  # type: ignore
 from injector import inject, singleton
 from llama_index.core.llms import ChatMessage, ChatResponse, MessageRole
 from llama_index.core.types import TokenGen
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from private_gpt.constants import PROJECT_ROOT_PATH
 from private_gpt.di import global_injector
@@ -22,7 +22,6 @@ from private_gpt.open_ai.extensions.context_filter import ContextFilter
 from private_gpt.server.chat.chat_service import ChatService, CompletionGen
 from private_gpt.server.chunks.chunks_service import Chunk, ChunksService
 from private_gpt.server.ingest.ingest_service import IngestService
-from private_gpt.server.recipes.summarize.summarize_service import SummarizeService
 from private_gpt.settings.settings import settings
 from private_gpt.ui.images import logo_svg
 
@@ -40,15 +39,11 @@ SOURCES_SEPARATOR = "<hr>Sources: \n"
 class Modes(str, Enum):
     RAG_MODE = "RAG"
     SEARCH_MODE = "Search"
-    BASIC_CHAT_MODE = "Basic"
-    SUMMARIZE_MODE = "Summarize"
 
 
 MODES: list[Modes] = [
     Modes.RAG_MODE,
     Modes.SEARCH_MODE,
-    Modes.BASIC_CHAT_MODE,
-    Modes.SUMMARIZE_MODE,
 ]
 
 
@@ -87,12 +82,10 @@ class PrivateGptUi:
         ingest_service: IngestService,
         chat_service: ChatService,
         chunks_service: ChunksService,
-        summarizeService: SummarizeService,
     ) -> None:
         self._ingest_service = ingest_service
         self._chat_service = chat_service
         self._chunks_service = chunks_service
-        self._summarize_service = summarizeService
 
         # Cache the UI blocks
         self._ui_block = None
@@ -192,13 +185,6 @@ class PrivateGptUi:
                     context_filter=context_filter,
                 )
                 yield from yield_deltas(query_stream)
-            case Modes.BASIC_CHAT_MODE:
-                llm_stream = self._chat_service.stream_chat(
-                    messages=all_messages,
-                    use_context=False,
-                )
-                yield from yield_deltas(llm_stream)
-
             case Modes.SEARCH_MODE:
                 response = self._chunks_service.retrieve_relevant(
                     text=message, limit=4, prev_next_chunks=0
@@ -212,25 +198,6 @@ class PrivateGptUi:
                     f"{source.text}"
                     for index, source in enumerate(sources, start=1)
                 )
-            case Modes.SUMMARIZE_MODE:
-                # Summarize the given message, optionally using selected files
-                context_filter = None
-                if self._selected_filename:
-                    docs_ids = []
-                    for ingested_document in self._ingest_service.list_ingested():
-                        if (
-                            ingested_document.doc_metadata["file_name"]
-                            == self._selected_filename
-                        ):
-                            docs_ids.append(ingested_document.doc_id)
-                    context_filter = ContextFilter(docs_ids=docs_ids)
-
-                summary_stream = self._summarize_service.stream_summarize(
-                    use_context=True,
-                    context_filter=context_filter,
-                    instructions=message,
-                )
-                yield from yield_tokens(summary_stream)
 
     # On initialization and on mode change, this function set the system prompt
     # to the default prompt based on the mode (and user settings).
@@ -241,12 +208,6 @@ class PrivateGptUi:
             # For query chat mode, obtain default system prompt from settings
             case Modes.RAG_MODE:
                 p = settings().ui.default_query_system_prompt
-            # For chat mode, obtain default system prompt from settings
-            case Modes.BASIC_CHAT_MODE:
-                p = settings().ui.default_chat_system_prompt
-            # For summarization mode, obtain default system prompt from settings
-            case Modes.SUMMARIZE_MODE:
-                p = settings().ui.default_summarization_system_prompt
             # For any other mode, clear the system prompt
             case _:
                 p = ""
@@ -259,10 +220,6 @@ class PrivateGptUi:
                 return "Get contextualized answers from selected files."
             case Modes.SEARCH_MODE:
                 return "Find relevant chunks of text in selected files."
-            case Modes.BASIC_CHAT_MODE:
-                return "Chat with the LLM using its training data. Files are ignored."
-            case Modes.SUMMARIZE_MODE:
-                return "Generate a summary of the selected files. Prompt to customize the result."
             case _:
                 return ""
 
@@ -367,40 +324,33 @@ class PrivateGptUi:
         logger.debug("Creating the UI blocks")
         with gr.Blocks(
             title=UI_TAB_TITLE,
-            theme=gr.themes.Soft(primary_hue=slate),
-            css=".logo { "
-            "display:flex;"
-            "background-color: #C7BAFF;"
-            "height: 80px;"
-            "border-radius: 8px;"
-            "align-content: center;"
-            "justify-content: center;"
-            "align-items: center;"
-            "}"
-            ".logo img { height: 40%; max-width: 80%; object-fit: contain; }"
-            ".contain { display: flex !important; flex-direction: column !important; }"
-            "#component-0, #component-3, #component-10, #component-8  { height: 100% !important; }"
-            "#chatbot { flex-grow: 1 !important; overflow: auto !important;}"
-            "#col { height: calc(100vh - 112px - 16px) !important; }"
-            "hr { margin-top: 1em; margin-bottom: 1em; border: 0; border-top: 1px solid #FFF; }"
-            "footer { display: none !important; visibility: hidden !important; }"
-            ".avatar-image { background-color: antiquewhite; border-radius: 2px; }",
-            # ".footer { text-align: center; margin-top: 20px; font-size: 14px; display: flex; align-items: center; justify-content: center; }"
-            # ".footer-zylon-link { display:flex; margin-left: 5px; text-decoration: auto; color: var(--body-text-color); }"
-            # ".footer-zylon-link:hover { color: #C7BAFF; }"
-            # ".footer-zylon-ico { height: 20px; margin-left: 5px; background-color: antiquewhite; border-radius: 2px; }",
+            theme=gr.themes.Base(primary_hue=purple),
+            css=".contain { display: flex !important; flex-direction: column !important; }"
+                "#component-0, #component-3, #component-10, #component-8  { height: 100% !important; }"
+                "#chatbot { flex-grow: 1 !important; overflow: auto !important;}"
+                "#col { height: calc(100vh - 16px) !important; }"
+                "footer { display: none !important; visibility: hidden !important; }",
         ) as blocks:
-            with gr.Row():
-                gr.HTML(f"<div class='logo'><img src='https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR_bS9Z-_0BLzFCzTEys0CJPF48FS5K61yp2Q&s' alt='NEC Chat'></div>")
+            # Remove ONLY this header row with the logo:
+            # with gr.Row():
+            #     gr.HTML(f"<div class='logo'><img src='https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR_bS9Z-_0BLzFCzTEys0CJPF48FS5K61yp2Q&s' alt='NEC Chat'></div>")
 
             with gr.Row(equal_height=False):
                 with gr.Column(scale=3):
+                    # Theme toggle button at the top
+                    theme_toggle_btn = gr.Button(
+                        "🌓 Switch Theme",
+                        size="sm",
+                        elem_id="theme-toggle-btn"
+                    )
+                    
                     default_mode = self._default_mode
                     mode = gr.Radio(
                         [mode.value for mode in MODES],
                         label="Mode",
                         value=default_mode,
                     )
+                    
                     explanation_mode = gr.Textbox(
                         placeholder=self._get_default_mode_explanation(default_mode),
                         show_label=False,
@@ -538,7 +488,7 @@ class PrivateGptUi:
                         return model_mapping[llm_mode]
 
                 with gr.Column(scale=7, elem_id="col"):
-                    # Determine the model label based on the value of PGPT_PROFILES
+                    # Keep the model label display - it's useful!
                     model_label = get_model_label()
                     if model_label is not None:
                         label_text = (
@@ -550,7 +500,7 @@ class PrivateGptUi:
                     _ = gr.ChatInterface(
                         self._chat,
                         chatbot=gr.Chatbot(
-                            label=label_text,
+                            label=label_text,  # Keep this!
                             show_copy_button=True,
                             elem_id="chatbot",
                             render=False,
@@ -562,12 +512,26 @@ class PrivateGptUi:
                         additional_inputs=[mode, upload_button, system_prompt_input],
                     )
 
-            # with gr.Row():
-            #     avatar_byte = AVATAR_BOT.read_bytes()
-            #     f_base64 = f"data:image/png;base64,{base64.b64encode(avatar_byte).decode('utf-8')}"
-            #     gr.HTML(
-            #         f"<div class='footer'><a class='footer-zylon-link' href='https://zylon.ai/'>Maintained by Zylon <img class='footer-zylon-ico' src='{f_base64}' alt=Zylon></a></div>"
-            #     )
+            # Add the theme toggle functionality
+            theme_toggle_btn.click(
+                None,
+                None,
+                None,
+                js="""
+                function() {
+                    const url = new URL(window.location);
+                    const currentTheme = url.searchParams.get('__theme');
+                    
+                    if (currentTheme === 'light') {
+                        url.searchParams.delete('__theme');
+                    } else {
+                        url.searchParams.set('__theme', 'light');
+                    }
+                    
+                    window.location.href = url.toString();
+                }
+                """
+            )
 
         return blocks
 
